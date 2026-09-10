@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Electrooculografía Clínica - Calibrado</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: #080c14;
+      color: #d1d5db;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .header {
+      width: 100%;
+      max-width: 1050px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #1e293b;
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+    .title-area h1 {
+      color: #38bdf8;
+      font-size: 1.3rem;
+      letter-spacing: 0.5px;
+    }
+    .title-area p {
+      color: #64748b;
+      font-size: 0.8rem;
+    }
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      width: 100%;
+      max-width: 1050px;
+    }
+    .card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    canvas {
+      width: 100%;
+      background-color: #020617;
+      border-radius: 6px;
+      display: block;
+    }
+    .grid-layout {
+      display: grid;
+      grid-template-columns: 2.1fr 1fr;
+      gap: 15px;
+    }
+    @media (max-width: 850px) {
+      .grid-layout { grid-template-columns: 1fr; }
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .btn:hover {
+      background: #334155;
+      border-color: #38bdf8;
+    }
+    .btn.active-normal {
+      background: #065f46;
+      border-color: #10b981;
+      color: #ecfdf5;
+    }
+    .btn.active-best {
+      background: #92400e;
+      border-color: #f59e0b;
+      color: #fffbeb;
+    }
+    .btn.active-dystrophy {
+      background: #991b1b;
+      border-color: #ef4444;
+      color: #fef2f2;
+    }
+    .metrics-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .metric-card {
+      background: #020617;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+    }
+    .metric-label {
+      font-size: 0.7rem;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .metric-value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #f8fafc;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-top: 4px;
+    }
+    .badge-normal { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .badge-patho { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+    .report-box {
+      background: #020617;
+      border-left: 3px solid #38bdf8;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title-area">
+      <h1>SISTEMA DE ELECTROOCULOGRAFÍA CLÍNICA (ISCEV)</h1>
+      <p>Calibración de Escala de Potencial Basal y Despolarización Transepithelial</p>
+    </div>
+    <div style="font-size:0.8rem; color:#94a3b8; background:#0f172a; padding:6px 12px; border-radius:6px; border:1px solid #1e293b;">
+      Escala ajustada: <strong>0 – 550 µV</strong>
+    </div>
+  </div>
+
+  <div class="main-container">
+    
+    <!-- Gráfica Envolvente de 30 Minutos -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 0.85rem; font-weight: bold; color: #38bdf8;">CURVA ENVOLVENTE DE AMPLITUD (0 - 30 MINUTOS)</span>
+        <span style="font-size: 0.75rem; color: #64748b;">🌙 Oscuridad (0-15 min) | ☀️ Luz (15-30 min)</span>
+      </div>
+      <canvas id="macroCanvas" width="1000" height="320"></canvas>
+    </div>
+
+    <div class="grid-layout">
+      <!-- Monitor Sacádico Secundario -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="font-size: 0.8rem; font-weight: bold; color: #94a3b8;">SEÑAL SACÁDICA EN TIEMPO REAL (<span id="currentPhaseText" style="color:#f59e0b;">Fase Actual</span>)</span>
+          <span style="font-size: 0.75rem; color: #64748b;">Muestreo: 100 Hz</span>
+        </div>
+        <canvas id="rawCanvas" width="650" height="140"></canvas>
+      </div>
+
+      <!-- Panel de Control y Métricas -->
+      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div class="metrics-panel">
+            <div class="metric-card">
+              <div class="metric-label">Índice de Arden</div>
+              <div class="metric-value" id="ardenVal">2.28</div>
+              <div id="badgeArden" class="status-badge badge-normal">NORMAL</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Light Peak / Dark Trough</div>
+              <div class="metric-value" id="ratioVal" style="font-size:1.1rem; margin-top:2px;">410 / 180 µV</div>
+              <div class="metric-label" style="margin-top:4px;">t<sub>LP</sub>: <span id="timePeak">24 min</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div style="font-size: 0.75rem; font-weight: bold; color: #64748b; margin-bottom: 2px;">SELECCIONAR PERFIL CLÍNICO:</div>
+          <button class="btn active-normal" id="btn-normal" onclick="setProfile('normal')">
+            🟢 Sujeto Sano (Control)
+            <div style="font-size:0.7rem; font-weight:normal; color:#94a3b8;">Arden ≥ 1.8 | Respuesta transepithelial normal (~2.2)</div>
+          </button>
+          <button class="btn" id="btn-best" onclick="setProfile('best')">
+            🟡 Enfermedad de Best
+            <div style="font-size:0.7rem; font-weight:normal; color:#94a3b8;">Arden &lt; 1.3 | Curva plana por mutación en BEST1</div>
+          </button>
+          <button class="btn" id="btn-dystrophy" onclick="setProfile('dystrophy')">
+            🔴 Distrofia Conos y Bastones
+            <div style="font-size:0.7rem; font-weight:normal; color:#94a3b8;">Arden &lt; 1.5 | Respuesta fisiológica abolida</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informe -->
+    <div class="card report-box">
+      <strong>INTERPRETACIÓN CLÍNICA:</strong>
+      <p id="reportText" style="margin-top: 4px;">Cargando datos...</p>
+    </div>
+
+  </div>
+
+  <script>
+    const macroCanvas = document.getElementById('macroCanvas');
+    const macroCtx = macroCanvas.getContext('2d');
+    const rawCanvas = document.getElementById('rawCanvas');
+    const rawCtx = rawCanvas.getContext('2d');
+
+    let currentProfile = 'normal';
+
+    // Puntos fisiológicos característicos por minuto (0 a 30)
+    function generateDataset(profile) {
+      const data = [];
+      
+      // Amplitud base teórica según la fisiología ocular
+      for (let min = 0; min <= 30; min++) {
+        let baseAmp = 0;
+        
+        if (profile === 'normal') {
+          if (min <= 15) {
+            // Curva descendente en oscuridad (cae hasta ~170 uV en min 10-12)
+            baseAmp = 230 - 60 * Math.sin((min / 15) * Math.PI * 0.85);
+          } else {
+            // Curva ascendente pronunciada en luz (sube hasta ~410 uV en min 23-24)
+            const lightMin = min - 15;
+            baseAmp = 170 + 240 * Math.sin((lightMin / 15) * Math.PI * 0.85);
+          }
+        } else if (profile === 'best') {
+          // Enfermedad de Best: Ligeras oscilaciones pero sin respuesta a luz (~175 uV)
+          baseAmp = 180 + Math.sin(min / 2.5) * 6;
+        } else if (profile === 'dystrophy') {
+          // Distrofia: Señal aplanada con leve degradación progresiva (~160 uV)
+          baseAmp = 170 - (min * 0.6) + Math.cos(min) * 5;
+        }
+
+        // Variabilidad biológica menor para evitar distorsionar la gráfica
+        const noise = (Math.random() - 0.5) * 8;
+        data.push({ minute: min, amplitude: Math.max(50, baseAmp + noise) });
+      }
+      return data;
+    }
+
+    let activeData = generateDataset('normal');
+
+    function setProfile(profile) {
+      currentProfile = profile;
+      activeData = generateDataset(profile);
+      
+      document.getElementById('btn-normal').className = "btn" + (profile === 'normal' ? " active-normal" : "");
+      document.getElementById('btn-best').className = "btn" + (profile === 'best' ? " active-best" : "");
+      document.getElementById('btn-dystrophy').className = "btn" + (profile === 'dystrophy' ? " active-dystrophy" : "");
+
+      updateAnalysis();
+      drawMacroChart();
+    }
+
+    function updateAnalysis() {
+      const darkValues = activeData.slice(0, 16).map(d => d.amplitude);
+      const lightValues = activeData.slice(15).map(d => d.amplitude);
+
+      const darkTrough = Math.min(...darkValues);
+      const lightPeak = Math.max(...lightValues);
+      const ardenIndex = (lightPeak / darkTrough).toFixed(2);
+      const peakMin = activeData.find(d => d.amplitude === lightPeak).minute;
+
+      document.getElementById('ardenVal').innerText = ardenIndex;
+      document.getElementById('ratioVal').innerText = `${Math.round(lightPeak)} / ${Math.round(darkTrough)} µV`;
+      document.getElementById('timePeak').innerText = `${peakMin} min`;
+
+      const badge = document.getElementById('badgeArden');
+      const report = document.getElementById('reportText');
+
+      if (currentProfile === 'normal') {
+        badge.className = "status-badge badge-normal";
+        badge.innerText = "NORMAL";
+        report.innerHTML = `<strong>Trazado Fisiológico Conservado:</strong> El potencial de reposo muestra la caída en la fase oscura (<i>Dark Trough</i> de ${Math.round(darkTrough)} µV) y el incremento despolarizante de la membrana basolateral del EPR ante la luz (<i>Light Peak</i> de ${Math.round(lightPeak)} µV). El Índice de Arden de <strong>${ardenIndex}</strong> refleja una función normal (&gt; 1.8).`;
+      } else if (currentProfile === 'best') {
+        badge.className = "status-badge badge-patho";
+        badge.innerText = "PATOGNOMÓNICO (BEST)";
+        report.innerHTML = `<strong>Patrón característico de Enfermedad de Best:</strong> Ausencia de despolarización estimulada por luz (curva plana). El Índice de Arden de <strong>${ardenIndex}</strong> (&lt; 1.3) es patognomónico de disfunción del canal de cloro (bestrofina-1) en el epitelio pigmentario de la retina.`;
+      } else {
+        badge.className = "status-badge badge-patho";
+        badge.innerText = "PATOLÓGICO SEVERO";
+        report.innerHTML = `<strong>Distrofia Difusa de Fotorreceptores:</strong> Ausencia de pico de luz (Arden = <strong>${ardenIndex}</strong>). La curva aplanada demuestra la alteración funcional masiva en conos, bastones y el epitelio pigmentario.`;
+      }
+    }
+
+    function drawMacroChart() {
+      macroCtx.clearRect(0, 0, macroCanvas.width, macroCanvas.height);
+      const w = macroCanvas.width;
+      const h = macroCanvas.height;
+      
+      // Margen amplio para que los ejes y textos se vean completos
+      const padL = 60, padR = 30, padT = 30, padB = 40;
+      const graphW = w - padL - padR;
+      const graphH = h - padT - padB;
+      const maxVolts = 550; // Escala ampliada a 550 uV para evitar cortes
+
+      // 1. FONDOS DE FASE (Oscuridad / Luz)
+      const midX = padL + graphW / 2;
+      macroCtx.fillStyle = "rgba(15, 23, 42, 0.9)";
+      macroCtx.fillRect(padL, padT, graphW / 2, graphH);
+
+      macroCtx.fillStyle = "rgba(120, 53, 15, 0.25)";
+      macroCtx.fillRect(midX, padT, graphW / 2, graphH);
+
+      // Etiquetas superiores
+      macroCtx.fillStyle = "#818cf8";
+      macroCtx.font = "bold 11px sans-serif";
+      macroCtx.fillText("🌙 FASE DE OSCURIDAD (0 - 15 min)", padL + 15, padT + 20);
+      macroCtx.fillStyle = "#f59e0b";
+      macroCtx.fillText("☀️ FASE DE LUZ ESTÁNDAR (15 - 30 min)", midX + 15, padT + 20);
+
+      // 2. REJILLA Y EJES
+      macroCtx.strokeStyle = "#1e293b";
+      macroCtx.lineWidth = 1;
+      
+      // Eje Y (µV) - Graduación cada 100 µV
+      for (let v = 0; v <= maxVolts; v += 100) {
+        const y = (padT + graphH) - (v / maxVolts) * graphH;
+        macroCtx.beginPath();
+        macroCtx.moveTo(padL, y);
+        macroCtx.lineTo(w - padR, y);
+        macroCtx.stroke();
+
+        macroCtx.fillStyle = "#64748b";
+        macroCtx.font = "11px monospace";
+        macroCtx.fillText(v + " µV", 12, y + 4);
+      }
+
+      // Eje X (Minutos)
+      for (let t = 0; t <= 30; t += 5) {
+        const x = padL + (t / 30) * graphW;
+        macroCtx.beginPath();
+        macroCtx.moveTo(x, padT);
+        macroCtx.lineTo(x, padT + graphH);
+        macroCtx.stroke();
+
+        macroCtx.fillStyle = "#64748b";
+        macroCtx.font = "11px monospace";
+        macroCtx.fillText(t + " min", x - 12, h - 15);
+      }
+
+      // 3. SUAVIZADO Y DIBUJO DE LA CURVA (Spline Bézier)
+      const lineColor = currentProfile === 'normal' ? '#10b981' : (currentProfile === 'best' ? '#f59e0b' : '#ef4444');
+      
+      // Convertir puntos a coordenadas en pantalla
+      const points = activeData.map(pt => ({
+        x: padL + (pt.minute / 30) * graphW,
+        y: (padT + graphH) - (pt.amplitude / maxVolts) * graphH
+      }));
+
+      // Dibujar trazo suave continuo
+      macroCtx.strokeStyle = lineColor;
+      macroCtx.lineWidth = 3;
+      macroCtx.beginPath();
+      macroCtx.moveTo(points[0].x, points[0].y);
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const xc = (points[i].x + points[i + 1].x) / 2;
+        const yc = (points[i].y + points[i + 1].y) / 2;
+        macroCtx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+      }
+      macroCtx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+      macroCtx.stroke();
+
+      // 4. DIBUJAR PUNTOS DE MUESTRA POR MINUTO
+      points.forEach(p => {
+        macroCtx.fillStyle = "#020617";
+        macroCtx.strokeStyle = lineColor;
+        macroCtx.lineWidth = 2;
+        macroCtx.beginPath();
+        macroCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        macroCtx.fill();
+        macroCtx.stroke();
+      });
+    }
+
+    // --- OSCILOGRAMA SACÁDICO SECUNDARIO ---
+    const rawBuffer = new Array(650).fill(0);
+    let sampleStep = 0;
+
+    function animateRawSignal() {
+      sampleStep += 0.08;
+      
+      const currentMinSim = Math.floor((sampleStep % 30));
+      const currentAmpData = activeData[currentMinSim] ? activeData[currentMinSim].amplitude : 170;
+      
+      let squareWave = Math.sign(Math.sin(sampleStep));
+      let signal = squareWave * (currentAmpData * 0.2);
+
+      // Pequeño ruido fisiológico
+      signal += (Math.random() - 0.5) * 5;
+
+      rawBuffer.shift();
+      rawBuffer.push(signal);
+
+      rawCtx.clearRect(0, 0, rawCanvas.width, rawCanvas.height);
+      rawCtx.strokeStyle = '#1e293b';
+      rawCtx.lineWidth = 1;
+      const centerY = rawCanvas.height / 2;
+      
+      rawCtx.beginPath();
+      rawCtx.moveTo(0, centerY);
+      rawCtx.lineTo(rawCanvas.width, centerY);
+      rawCtx.stroke();
+
+      const lineColor = currentProfile === 'normal' ? '#34d399' : (currentProfile === 'best' ? '#fbbf24' : '#f87171');
+      rawCtx.strokeStyle = lineColor;
+      rawCtx.lineWidth = 1.5;
+      rawCtx.beginPath();
+
+      for (let i = 0; i < rawBuffer.length; i++) {
+        const x = i;
+        const y = centerY - rawBuffer[i];
+        if (i === 0) rawCtx.moveTo(x, y); else rawCtx.lineTo(x, y);
+      }
+      rawCtx.stroke();
+
+      const phaseText = document.getElementById('currentPhaseText');
+      if (currentMinSim <= 15) {
+        phaseText.innerText = `Oscuridad (${currentMinSim} min)`;
+        phaseText.style.color = "#a5b4fc";
+      } else {
+        phaseText.innerText = `Luz Encendida (${currentMinSim} min)`;
+        phaseText.style.color = "#f59e0b";
+      }
+
+      requestAnimationFrame(animateRawSignal);
+    }
+
+    // Inicialización
+    setProfile('normal');
+    animateRawSignal();
+  </script>
+</body>
+</html>

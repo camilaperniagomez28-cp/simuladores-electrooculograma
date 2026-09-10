@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador EOG Clínico - Curva Envolvente ISCEV</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0b0f19;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #38bdf8;
+      font-size: 1.6rem;
+      margin-bottom: 5px;
+    }
+    p.subtitle {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 15px;
+    }
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      width: 100%;
+      max-width: 950px;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 15px;
+    }
+    canvas {
+      width: 100%;
+      height: 260px;
+      background-color: #020617;
+      border-radius: 6px;
+      display: block;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .btn {
+      background: #334155;
+      color: #fff;
+      border: 1px solid #475569;
+      padding: 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .btn:hover {
+      background: #475569;
+      border-color: #38bdf8;
+    }
+    .btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 15px;
+    }
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    .metric-box {
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 8px;
+      border-left: 5px solid #94a3b8;
+      margin-bottom: 10px;
+    }
+    .metric-value {
+      font-size: 1.8rem;
+      font-weight: bold;
+    }
+    .status-normal { border-left-color: #22c55e; color: #4ade80; }
+    .status-patho { border-left-color: #ef4444; color: #f87171; }
+    .sub-canvas-title {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Simulador Clínico de EOG (Protocolo ISCEV)</h1>
+  <p class="subtitle">Curva Envolvente de 30 minutos: Evaluación de Adaptación a Luz/Oscuridad</p>
+
+  <div class="main-container">
+    
+    <!-- Gráfica Principal: Curva de 30 Minutos -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <strong style="color: #38bdf8;">Curva Envolvente de Amplitud (0 - 30 min)</strong>
+        <span style="font-size: 0.8rem; color: #94a3b8;">🌙 Oscuridad (0-15m) | ☀️ Luz (15-30m)</span>
+      </div>
+      <canvas id="envelopeCanvas" width="900" height="260"></canvas>
+    </div>
+
+    <!-- Panel Inferior: Muestra de Señal Sacádica y Controles -->
+    <div class="grid-2">
+      
+      <!-- Trazado Sacádico Muestra -->
+      <div class="card">
+        <div class="sub-canvas-title">Trazado Sacádico en Vivo (Muestra de 10 seg a 30 Hz):</div>
+        <canvas id="rawSignalCanvas" width="550" height="120"></canvas>
+      </div>
+
+      <!-- Métricas y Diagnóstico -->
+      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div class="metric-box status-patho" id="metricContainer">
+            <small style="color: #94a3b8;">Índice de Arden Calculado:</small>
+            <div class="metric-value" id="ardenDisplay">1.18</div>
+            <small id="ardenStatusText">PATOLÓGICO SEVERO</small>
+          </div>
+        </div>
+        
+        <div class="controls">
+          <button class="btn" onclick="loadProfile('normal', this)">
+            🟢 Control Sano
+            <small style="display:block; font-weight:normal; color:#cbd5e1;">Pico de luz prominente (Arden > 1.8)</small>
+          </button>
+          <button class="btn active" onclick="loadProfile('dystrophy', this)">
+            🔴 Distrofia Conos-Bastones
+            <small style="display:block; font-weight:normal; color:#cbd5e1;">Curva plana (Arden < 1.5)</small>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Reporte Clínico -->
+    <div class="card" style="border-left: 4px solid #38bdf8;">
+      <strong style="color: #38bdf8;">Hallazgo Electrofisiológico:</strong>
+      <p id="clinicalReport" style="font-size: 0.88rem; margin-top: 5px; color: #cbd5e1;">
+        Ausencia de incremento en la respuesta eléctrica tras la estimulación luminosa (Light Peak plano). El índice de Arden de 1.18 confirma una disfunción difusa y severa del epitelio pigmentario de la retina y fotorreceptores.
+      </p>
+    </div>
+
+  </div>
+
+  <script>
+    const envCanvas = document.getElementById('envelopeCanvas');
+    const envCtx = envCanvas.getContext('2d');
+    
+    const rawCanvas = document.getElementById('rawSignalCanvas');
+    const rawCtx = rawCanvas.getContext('2d');
+
+    let currentProfile = 'dystrophy'; // 'normal' o 'dystrophy'
+    let rawBuffer = new Array(rawCanvas.width).fill(0);
+    let stepCount = 0;
+
+    // Puntos macro para generar la curva (Amplitud en µV vs Tiempo en minutos)
+    const timePoints = [0, 2, 4, 6, 8, 10, 12, 14, 15, 17, 19, 21, 23, 25, 27, 29, 30];
+    
+    // Perfil Paciente Sano
+    const normalCurve = [200, 220, 230, 220, 190, 175, 170, 180, 200, 260, 310, 350, 375, 380, 350, 320, 300];
+    
+    // Perfil Distrofia Conos y Bastones (Curva plana / Patológica)
+    const dystrophyCurve = [190, 180, 185, 175, 170, 168, 165, 170, 175, 180, 182, 185, 180, 178, 175, 172, 170];
+
+    function loadProfile(profile, element) {
+      document.querySelectorAll('.controls .btn').forEach(b => b.classList.remove('active'));
+      if(element) element.classList.add('active');
+
+      currentProfile = profile;
+      updateMetrics();
+      drawEnvelopeGraph();
+    }
+
+    function updateMetrics() {
+      const container = document.getElementById('metricContainer');
+      const display = document.getElementById('ardenDisplay');
+      const statusText = document.getElementById('ardenStatusText');
+      const report = document.getElementById('clinicalReport');
+
+      if (currentProfile === 'normal') {
+        const darkTrough = Math.min(...normalCurve.slice(0, 8)); // ~170 µV
+        const lightPeak = Math.max(...normalCurve.slice(8));     // ~380 µV
+        const arden = (lightPeak / darkTrough).toFixed(2);
+
+        display.innerText = arden;
+        statusText.innerText = "RESPUESTA NORMAL (> 1.8)";
+        container.className = "metric-box status-normal";
+        report.innerText = "Respuesta foveal y del epitelio pigmentario conservada. Elevación adecuada del potencial eléctrico en presencia de luz (Light Peak presente).";
+      } else {
+        const darkTrough = Math.min(...dystrophyCurve.slice(0, 8)); // ~165 µV
+        const lightPeak = Math.max(...dystrophyCurve.slice(8));     // ~185 µV
+        const arden = (lightPeak / darkTrough).toFixed(2);
+
+        display.innerText = arden;
+        statusText.innerText = "PATOLÓGICO (Arden < 1.5)";
+        container.className = "metric-box status-patho";
+        report.innerText = "Ausencia de incremento en la respuesta eléctrica tras la estimulación luminosa (Light Peak abolido). El índice de Arden de " + arden + " confirma una disfunción difusa del epitelio pigmentario de la retina y fotorreceptores.";
+      }
+    }
+
+    function drawEnvelopeGraph() {
+      envCtx.clearRect(0, 0, envCanvas.width, envCanvas.height);
+
+      const w = envCanvas.width;
+      const h = envCanvas.height;
+      const padding = 40;
+
+      // 1. Fondos para las fases (Oscuridad vs Luz)
+      const midX = padding + (w - 2 * padding) / 2;
+      
+      // Fase Oscuridad
+      envCtx.fillStyle = "rgba(30, 27, 75, 0.4)";
+      envCtx.fillRect(padding, 20, midX - padding, h - 50);
+
+      // Fase Luz
+      envCtx.fillStyle = "rgba(113, 63, 18, 0.3)";
+      envCtx.fillRect(midX, 20, (w - padding) - midX, h - 50);
+
+      // Etiquetas de fase
+      envCtx.fillStyle = "#a5b4fc";
+      envCtx.font = "bold 12px sans-serif";
+      envCtx.fillText("🌙 FASE DE OSCURIDAD (0 - 15 min)", padding + 20, 40);
+
+      envCtx.fillStyle = "#fef08a";
+      envCtx.fillText("☀️ FASE DE LUZ (15 - 30 min)", midX + 20, 40);
+
+      // 2. Rejilla y Ejes
+      envCtx.strokeStyle = "#334155";
+      envCtx.lineWidth = 1;
+
+      // Eje Y (Amplitud 0 a 400 µV)
+      for (let v = 0; v <= 400; v += 100) {
+        const y = (h - 30) - (v / 400) * (h - 60);
+        envCtx.beginPath();
+        envCtx.moveTo(padding, y);
+        envCtx.lineTo(w - padding, y);
+        envCtx.stroke();
+
+        envCtx.fillStyle = "#94a3b8";
+        envCtx.font = "10px sans-serif";
+        envCtx.fillText(v + " µV", 5, y + 3);
+      }
+
+      // Eje X (Minutos 0 a 30)
+      for (let t = 0; t <= 30; t += 5) {
+        const x = padding + (t / 30) * (w - 2 * padding);
+        envCtx.beginPath();
+        envCtx.moveTo(x, 20);
+        envCtx.lineTo(x, h - 30);
+        envCtx.stroke();
+
+        envCtx.fillStyle = "#94a3b8";
+        envCtx.fillText(t + " min", x - 12, h - 10);
+      }
+
+      // 3. Dibujar Curva Normal de Referencia (Punteada Gris)
+      renderCurve(normalCurve, "#64748b", [4, 4], 1.5);
+
+      // 4. Dibujar Curva del Paciente Seleccionado
+      const activeData = currentProfile === 'normal' ? normalCurve : dystrophyCurve;
+      const activeColor = currentProfile === 'normal' ? '#4ade80' : '#f87171';
+      renderCurve(activeData, activeColor, [], 3);
+    }
+
+    function renderCurve(dataArray, color, dashArray, lineWidth) {
+      const w = envCanvas.width;
+      const h = envCanvas.height;
+      const padding = 40;
+
+      envCtx.save();
+      envCtx.strokeStyle = color;
+      envCtx.lineWidth = lineWidth;
+      envCtx.setLineDash(dashArray);
+      envCtx.beginPath();
+
+      for (let i = 0; i < dataArray.length; i++) {
+        const x = padding + (timePoints[i] / 30) * (w - 2 * padding);
+        const y = (h - 30) - (dataArray[i] / 400) * (h - 60);
+
+        if (i === 0) envCtx.moveTo(x, y);
+        else envCtx.lineTo(x, y);
+      }
+      envCtx.stroke();
+
+      // Puntos de muestreo
+      for (let i = 0; i < dataArray.length; i++) {
+        const x = padding + (timePoints[i] / 30) * (w - 2 * padding);
+        const y = (h - 30) - (dataArray[i] / 400) * (h - 60);
+        
+        envCtx.fillStyle = color;
+        envCtx.beginPath();
+        envCtx.arc(x, y, 3, 0, Math.PI * 2);
+        envCtx.fill();
+      }
+
+      envCtx.restore();
+    }
+
+    // Animación de la señal sacádica rápida (10 segundos)
+    function animateRawSignal() {
+      stepCount += 0.1;
+      
+      // Amplitud basada en el perfil
+      const currentAmp = currentProfile === 'normal' ? 35 : 18;
+      
+      // Generar sacada (onda cuadrada suavizada) + ruido EMG
+      let signal = Math.sign(Math.sin(stepCount)) * currentAmp;
+      signal += (Math.random() - 0.5) * 4;
+
+      rawBuffer.shift();
+      rawBuffer.push(signal);
+
+      rawCtx.clearRect(0, 0, rawCanvas.width, rawCanvas.height);
+      
+      // Rejilla fondo
+      rawCtx.strokeStyle = '#1e293b';
+      rawCtx.beginPath();
+      rawCtx.moveTo(0, rawCanvas.height / 2);
+      rawCtx.lineTo(rawCanvas.width, rawCanvas.height / 2);
+      rawCtx.stroke();
+
+      // Trazo
+      rawCtx.strokeStyle = currentProfile === 'normal' ? '#4ade80' : '#f87171';
+      rawCtx.lineWidth = 1.5;
+      rawCtx.beginPath();
+
+      const centerY = rawCanvas.height / 2;
+
+      for (let i = 0; i < rawBuffer.length; i++) {
+        const x = i;
+        const y = centerY - rawBuffer[i];
+        if (i === 0) rawCtx.moveTo(x, y);
+        else rawCtx.lineTo(x, y);
+      }
+      rawCtx.stroke();
+
+      requestAnimationFrame(animateRawSignal);
+    }
+
+    // Inicialización
+    updateMetrics();
+    drawEnvelopeGraph();
+    animateRawSignal();
+  </script>
+</body>
+</html>

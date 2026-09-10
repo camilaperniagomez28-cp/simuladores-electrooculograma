@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador de Electrooculografía (EOG)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #121824;
+      color: #e0e6ed;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 5px;
+      color: #00d2ff;
+      font-size: 1.8rem;
+    }
+    p.subtitle {
+      margin-bottom: 20px;
+      color: #a0aec0;
+      font-size: 0.95rem;
+    }
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 100%;
+      max-width: 900px;
+    }
+    .canvas-card {
+      background: #1a2332;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+      position: relative;
+    }
+    canvas {
+      width: 100%;
+      height: 250px;
+      background-color: #0b0f19;
+      border-radius: 6px;
+      display: block;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+    }
+    .btn {
+      background: #2b3648;
+      color: #ffffff;
+      border: 1px solid #4a5568;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn:hover {
+      background: #3a4a61;
+      border-color: #00d2ff;
+      color: #00d2ff;
+    }
+    .btn.active {
+      background: #00d2ff;
+      color: #0b0f19;
+      border-color: #00d2ff;
+    }
+    .btn-blink {
+      grid-column: span 1;
+      background: #312e81;
+      border-color: #4338ca;
+    }
+    .btn-blink:hover {
+      background: #3730a3;
+      color: #a5b4fc;
+      border-color: #818cf8;
+    }
+    .slider-card {
+      background: #1a2332;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+    }
+    .slider-card label {
+      font-weight: 500;
+      color: #cbd5e0;
+    }
+    input[type="range"] {
+      flex-grow: 1;
+      accent-color: #00d2ff;
+    }
+    .info-panel {
+      background: #1a2332;
+      border-left: 4px solid #00d2ff;
+      padding: 12px 15px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.9rem;
+      color: #cbd5e0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Simulador de Electrooculografía (EOG)</h1>
+  <p class="subtitle">Adquisición de bioseñales en tiempo real (Dipolo Córneo-Retiniano)</p>
+
+  <div class="main-container">
+    <div class="canvas-card">
+      <canvas id="eogCanvas" width="800" height="250"></canvas>
+    </div>
+
+    <div class="controls-grid">
+      <button class="btn active" onclick="setMovement('rest', this)">
+        <span>👁️</span> Reposo
+      </button>
+      <button class="btn" onclick="setMovement('left', this)">
+        <span>⬅️</span> Izquierda
+      </button>
+      <button class="btn" onclick="setMovement('right', this)">
+        <span>➡️</span> Derecha
+      </button>
+      <button class="btn" onclick="setMovement('up', this)">
+        <span>⬆️</span> Arriba
+      </button>
+      <button class="btn" onclick="setMovement('down', this)">
+        <span>⬇️</span> Abajo
+      </button>
+      <button class="btn btn-blink" onclick="triggerBlink()">
+        <span>😉</span> Parpadeo
+      </button>
+    </div>
+
+    <div class="slider-card">
+      <label for="noiseSlider">Ruido de interferencia (EMG / Electrónico):</label>
+      <input type="range" id="noiseSlider" min="0" max="10" value="2">
+      <span id="noiseVal">2</span>
+    </div>
+
+    <div class="info-panel" id="statusInfo">
+      <strong>Estado actual:</strong> Mirada al frente (Potencial de reposo basal).
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('eogCanvas');
+    const ctx = canvas.getContext('2d');
+    const noiseSlider = document.getElementById('noiseSlider');
+    const noiseVal = document.getElementById('noiseVal');
+    const statusInfo = document.getElementById('statusInfo');
+
+    // Configuración de la señal
+    const bufferLength = canvas.width;
+    const dataBuffer = new Array(bufferLength).fill(0);
+    
+    let currentBaseline = 0; // Offset según la mirada
+    let blinkActive = false;
+    let blinkProgress = 0;
+    let noiseLevel = 2;
+
+    noiseSlider.addEventListener('input', (e) => {
+      noiseLevel = parseFloat(e.target.value);
+      noiseVal.textContent = noiseLevel;
+    });
+
+    function setMovement(type, element) {
+      // Actualizar botones activos
+      document.querySelectorAll('.controls-grid .btn').forEach(b => b.classList.remove('active'));
+      if (element) element.classList.add('active');
+
+      switch(type) {
+        case 'rest':
+          currentBaseline = 0;
+          statusInfo.innerHTML = "<strong>Estado actual:</strong> Reposo. El dipolo ocular está centrado.";
+          break;
+        case 'left':
+          currentBaseline = -50; // Deflexión negativa
+          statusInfo.innerHTML = "<strong>Estado actual:</strong> Mirada a la izquierda. La córnea se aleja del electrodo positivo (deflexión negativa).";
+          break;
+        case 'right':
+          currentBaseline = 50; // Deflexión positiva
+          statusInfo.innerHTML = "<strong>Estado actual:</strong> Mirada a la derecha. La córnea se aproxima al electrodo positivo (deflexión positiva).";
+          break;
+        case 'up':
+          currentBaseline = 35; 
+          statusInfo.innerHTML = "<strong>Estado actual:</strong> Mirada hacia arriba (Registro vertical canal mono/bipolar).";
+          break;
+        case 'down':
+          currentBaseline = -35;
+          statusInfo.innerHTML = "<strong>Estado actual:</strong> Mirada hacia abajo.";
+          break;
+      }
+    }
+
+    function triggerBlink() {
+      if (!blinkActive) {
+        blinkActive = true;
+        blinkProgress = 0;
+      }
+    }
+
+    function getSignalSample() {
+      let sample = currentBaseline;
+
+      // Generar pico de parpadeo (Artefacto rápido de alta amplitud)
+      if (blinkActive) {
+        // Onda senoidal corta y de alta amplitud para simular el parpadeo
+        sample += Math.sin(blinkProgress * Math.PI) * 90;
+        blinkProgress += 0.15;
+        if (blinkProgress >= 1) {
+          blinkActive = false;
+          blinkProgress = 0;
+        }
+      }
+
+      // Ruido gaussiano/aleatorio
+      const noise = (Math.random() - 0.5) * (noiseLevel * 4);
+      
+      return sample + noise;
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+
+      // Cuadrícula vertical
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+
+      // Cuadrícula horizontal
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Línea cero de referencia
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+    }
+
+    function animate() {
+      // 1. Desplazar buffer de datos
+      dataBuffer.shift();
+      dataBuffer.push(getSignalSample());
+
+      // 2. Limpiar Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 3. Dibujar fondo y cuadrícula
+      drawGrid();
+
+      // 4. Dibujar la traza EOG
+      ctx.strokeStyle = '#00d2ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      const centerY = canvas.height / 2;
+
+      for (let i = 0; i < dataBuffer.length; i++) {
+        const x = i;
+        // Invertimos la Y porque en Canvas el origen 0,0 está arriba
+        const y = centerY - dataBuffer[i];
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+
+      requestAnimationFrame(animate);
+    }
+
+    // Iniciar animación
+    animate();
+  </script>
+</body>
+</html>
