@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía Interactiva y Simulador de Electrooculografía (EOG)</title>
+    <!-- Chart.js y Plugin de Anotaciones -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+        }
+        h1 { color: #38bdf8; margin-bottom: 5px; }
+        .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+        
+        /* Navegación por pestañas */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 10px;
+        }
+        .tab-btn {
+            background: #0f172a;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1.2fr;
+            gap: 20px;
+        }
+        
+        .chart-container {
+            background: #090d16;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            position: relative;
+        }
+
+        .explanation-panel {
+            background: #0f172a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .step-title { color: #38bdf8; font-size: 18px; font-weight: bold; margin-bottom: 8px; }
+        .step-desc { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
+
+        .nav-buttons { display: flex; gap: 10px; margin-top: 15px; }
+
+        button.action-btn {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            background: #0284c7;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            flex: 1;
+            transition: background 0.2s;
+        }
+        button.action-btn:hover { background: #0369a1; }
+        button.action-btn:disabled { background: #334155; cursor: not-allowed; }
+
+        .metrics-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-around;
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            margin-top: 10px;
+        }
+
+        .metric-box { text-align: center; }
+        .metric-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; }
+        .metric-val { font-size: 20px; font-weight: bold; color: #38bdf8; margin-top: 2px; }
+
+        /* Estilos de la Pestaña de Electrodos */
+        .electrodes-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .diagram-box {
+            background: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .diagram-box img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .electrode-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .electrode-item {
+            background: #0f172a;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border-left: 4px solid #38bdf8;
+            border: 1px solid #334155;
+        }
+
+        .electrode-item strong { color: #38bdf8; }
+
+        .theory-card {
+            background: #0f172a;
+            padding: 18px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            margin-top: 20px;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Desglose Anatómicofisiológico y Técnico del EOG</h1>
+    <div class="subtitle">Mecanismos bioeléctricos, colocación de electrodos y cálculo del Índice de Arden.</div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('curva')">Trazado y Fisiología</button>
+        <button class="tab-btn" onclick="switchTab('electrodos')">Montaje de Electrodos y Principio Físico</button>
+    </div>
+
+    <!-- PESTAÑA 1: TRAZADO Y FISIOLOGÍA -->
+    <div id="tab-curva" class="tab-content active">
+        <div class="layout-grid">
+            <div class="chart-container">
+                <canvas id="eogExplainChart" height="160"></canvas>
+            </div>
+
+            <div class="explanation-panel">
+                <div>
+                    <div id="stepTag" style="font-size: 12px; color: #eab308; text-transform: uppercase; font-weight: bold;">Fase 1 de 5</div>
+                    <div id="stepTitle" class="step-title">1. Potencial de Reposo Baseline</div>
+                    <div id="stepDesc" class="step-desc">Cargando descripción...</div>
+                </div>
+
+                <div class="nav-buttons">
+                    <button id="prevBtn" class="action-btn" onclick="changeStep(-1)" disabled>Anterior</button>
+                    <button id="nextBtn" class="action-btn" onclick="changeStep(1)">Siguiente</button>
+                </div>
+            </div>
+
+            <div class="metrics-bar">
+                <div class="metric-box">
+                    <div class="metric-label">Basal (t = 0)</div>
+                    <div class="metric-val">130 µV</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Valle Oscuridad (DT)</div>
+                    <div id="dtDisplay" class="metric-val">100 µV</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Pico de Luz (LP)</div>
+                    <div id="lpDisplay" class="metric-val">215 µV</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Índice de Arden (LP/DT)</div>
+                    <div id="ardenDisplay" class="metric-val">2.15 (Normal)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PESTAÑA 2: MONTAJE DE ELECTRODOS -->
+    <div id="tab-electrodos" class="tab-content">
+        <div class="electrodes-grid">
+            <div class="diagram-box">
+                <!-- Representación del esquema enviado por el usuario -->
+                <svg viewBox="0 0 200 240" width="100%" height="auto" style="background:#fff; border-radius:6px;">
+                    <!-- Silueta básica de cabeza -->
+                    <path d="M 100 20 C 50 20, 30 60, 30 110 C 30 170, 60 210, 100 220 C 140 210, 170 170, 170 110 C 170 60, 150 20, 100 20 Z" fill="none" stroke="#333" stroke-width="2"/>
+                    <!-- Ojos -->
+                    <ellipse cx="65" cy="110" rx="15" ry="8" fill="none" stroke="#333" stroke-width="1.5"/>
+                    <circle cx="65" cy="110" r="4" fill="#333"/>
+                    <ellipse cx="135" cy="110" rx="15" ry="8" fill="none" stroke="#333" stroke-width="1.5"/>
+                    <circle cx="135" cy="110" r="4" fill="#333"/>
+                    <!-- Electrodos -->
+                    <!-- A: Frente / Referencia Tierra -->
+                    <circle cx="85" cy="60" r="6" fill="#000"/>
+                    <text x="72" y="64" font-weight="bold" font-size="12">A</text>
+                    <!-- B: Supraorbitario -->
+                    <circle cx="125" cy="88" r="6" fill="#000"/>
+                    <text x="112" y="92" font-weight="bold" font-size="12">B</text>
+                    <!-- C: Infraorbitario -->
+                    <circle cx="125" cy="138" r="6" fill="#000"/>
+                    <text x="112" y="142" font-weight="bold" font-size="12">C</text>
+                    <!-- D: Canto Externo Ojo Derecho -->
+                    <circle cx="40" cy="110" r="6" fill="#000"/>
+                    <text x="25" y="114" font-weight="bold" font-size="12">D</text>
+                    <!-- E: Canto Externo Ojo Izquierdo -->
+                    <circle cx="160" cy="110" r="6" fill="#000"/>
+                    <text x="172" y="114" font-weight="bold" font-size="12">E</text>
+                </svg>
+            </div>
+
+            <div class="electrode-list">
+                <div class="electrode-item" style="border-left-color: #eab308;">
+                    <strong>Punto A (Electrodo de Tierra / Referencia):</strong>
+                    <br>Ubicado en el centro de la frente. Elimina el ruido de modo común de la red eléctrica y estabiliza la señal diferencial.
+                </div>
+                <div class="electrode-item">
+                    <strong>Puntos D y E (Canal Horizontal):</strong>
+                    <br>Ubicados en el canto externo del ojo derecho (D) y canto externo del ojo izquierdo (E). Capturan los movimientos oculares horizontales de sacada (30°) necesarios para medir el cambio de potencial.
+                </div>
+                <div class="electrode-item">
+                    <strong>Puntos B y C (Canal Vertical):</strong>
+                    <br>Ubicados arriba (B - supraorbitario) y abajo (C - infraorbitario) del ojo. Se utilizan para registrar movimientos verticales y filtrar artefactos por parpadeo.
+                </div>
+            </div>
+        </div>
+
+        <div class="theory-card">
+            <h3 style="color: #38bdf8; margin-top:0;">¿Cómo funciona físicamente el registro del EOG?</h3>
+            <p>
+                El ojo humano actúa como un <strong>dipolo eléctrico permanente</strong>: la córnea es electropositiva respecto a la retina y al polo posterior (electronegativo).
+            </p>
+            <ul>
+                <li>Cuando el paciente mira <strong>hacia la derecha</strong>, la córnea (+ electropositiva) se aproxima al electrodo derecho (E), generando una deflexión positiva en ese canal.</li>
+                <li>Cuando el paciente mira <strong>hacia la izquierda</strong>, la córnea se aproxima al electrodo izquierdo (D), registrando la deflexión opuesta.</li>
+                <li>El amplificador biopotencial resta estas dos señales (amplificación diferencial). La amplitud pico a pico registrada durante las sacadas constantes de 30° es proporcional al potencial transretiniano.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    const stepsData = [
+        {
+            title: "1. Potencial Córneo-Retiniano de Reposo",
+            tag: "Fase 1 de 5 — Adaptación Inicial",
+            desc: "El globo ocular se comporta como un dipolo eléctrico constante debido a la separación de cargas entre la córnea (+ electropositiva) y el polo posterior (- electronegativo). En iluminación estándar, las sacadas horizontales fijas registran un potencial basal cercano a 130 µV.",
+            activePoint: 0
+        },
+        {
+            title: "2. Transición y Adaptación a la Oscuridad",
+            tag: "Fase 2 de 5 — Minutos 0 a 10",
+            desc: "Al apagar la luz, los fotorreceptores (bastones) se hiperpolarizan de forma sostenida. Esto reduce la liberación de mensajeros químicos hacia el EPR, provocando un cierre progresivo de los canales de cloro basolaterales.",
+            activePoint: 6
+        },
+        {
+            title: "3. Valle de Oscuridad (Dark Trough - DT)",
+            tag: "Fase 3 de 5 — Minuto 12",
+            desc: "Es el punto de mínima amplitud de todo el registro. Indica la máxima inhibición fisiológica de la conductancia iónica del EPR en ausencia de fotones. Es el denominador de la fórmula de Arden.",
+            activePoint: 11
+        },
+        {
+            title: "4. Estímulo Fótico y Pico de Luz (Light Peak - LP)",
+            tag: "Fase 4 de 5 — Minuto 21",
+            desc: "Al encender una luz brillante, la rodopsina absorbe fotones y despolariza la membrana basolateral del EPR por apertura masiva de canales de Cl- (Bestrofina-1), generando el pico de voltaje máximo.",
+            activePoint: 21
+        },
+        {
+            title: "5. Evaluación del Índice de Arden",
+            tag: "Fase 5 de 5 — Interpretación Clínica",
+            desc: "El cociente de Arden se calcula dividiendo el Pico de Luz entre el Valle de Oscuridad:<br><br><strong>Índice de Arden = Light Peak (LP) / Dark Trough (DT)</strong><br><br>• Normal: > 1.8<br>• Limítrofe: 1.5 - 1.7<br>• Patológico: < 1.5",
+            activePoint: 21
+        }
+    ];
+
+    let currentStep = 0;
+    let chartInstance = null;
+
+    const timeLabels = Array.from({length: 31}, (_, i) => `${i} min`);
+    const eogValues = [
+        130, 125, 118, 110, 104, 101, 100, 99, 99, 100,
+        100, 101, 100, 105, 112, 125, 145, 170, 192, 208,
+        214, 215, 213, 210, 202, 190, 175, 160, 150, 142, 138
+    ];
+
+    function renderChart() {
+        const ctx = document.getElementById('eogExplainChart').getContext('2d');
+        const step = stepsData[currentStep];
+
+        const pointColors = eogValues.map((_, idx) => idx === step.activePoint ? '#38bdf8' : 'rgba(255, 255, 255, 0.2)');
+        const pointSizes = eogValues.map((_, idx) => idx === step.activePoint ? 9 : 2);
+
+        if (chartInstance) chartInstance.destroy();
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [{
+                    label: 'Potencial EOG (µV)',
+                    data: eogValues,
+                    borderColor: '#0284c7',
+                    borderWidth: 3,
+                    tension: 0.35,
+                    pointBackgroundColor: pointColors,
+                    pointRadius: pointSizes,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Tiempo de Registro (Minutos)', color: '#cbd5e1' }
+                    },
+                    y: {
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Amplitud (µV)', color: '#cbd5e1' },
+                        min: 60,
+                        max: 240
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            boxDark: {
+                                type: 'box', xMin: 0, xMax: 15,
+                                backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                                borderColor: '#334155', borderWidth: 1
+                            },
+                            boxLight: {
+                                type: 'box', xMin: 15, xMax: 30,
+                                backgroundColor: 'rgba(254, 240, 138, 0.05)',
+                                borderColor: '#334155', borderWidth: 1
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateStepUI() {
+        const step = stepsData[currentStep];
+        document.getElementById('stepTag').innerText = step.tag;
+        document.getElementById('stepTitle').innerText = step.title;
+        document.getElementById('stepDesc').innerHTML = step.desc;
+
+        document.getElementById('prevBtn').disabled = currentStep === 0;
+        document.getElementById('nextBtn').disabled = currentStep === stepsData.length - 1;
+
+        renderChart();
+    }
+
+    function changeStep(delta) {
+        currentStep += delta;
+        if (currentStep < 0) currentStep = 0;
+        if (currentStep >= stepsData.length) currentStep = stepsData.length - 1;
+        updateStepUI();
+    }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        if (tabName === 'curva') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('tab-curva').classList.add('active');
+            renderChart();
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('tab-electrodos').classList.add('active');
+        }
+    }
+
+    window.onload = updateStepUI;
+</script>
+
+</body>
+</html>
