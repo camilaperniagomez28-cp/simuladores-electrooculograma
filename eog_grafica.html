@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía Interactiva y Simulador de Electrooculografía (EOG)</title>
+    <!-- Chart.js y Plugin de Anotaciones -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+        }
+        h1 { color: #38bdf8; margin-bottom: 5px; }
+        .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+        
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1.2fr;
+            gap: 20px;
+        }
+        
+        .chart-container {
+            background: #090d16;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            position: relative;
+        }
+
+        .explanation-panel {
+            background: #0f172a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .step-title {
+            color: #38bdf8;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .step-desc {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            background: #0284c7;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            flex: 1;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: #0369a1; }
+        button:disabled { background: #334155; cursor: not-allowed; }
+
+        .metrics-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-around;
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            margin-top: 10px;
+        }
+
+        .metric-box { text-align: center; }
+        .metric-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; }
+        .metric-val { font-size: 20px; font-weight: bold; color: #38bdf8; margin-top: 2px; }
+
+        .deep-dive {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .card {
+            background: #0f172a;
+            padding: 18px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .card h3 {
+            color: #38bdf8;
+            margin-top: 0;
+            font-size: 15px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 5px;
+        }
+
+        .highlight-text {
+            color: #fde68a;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Desglose Anatómicofisiológico del EOG</h1>
+    <div class="subtitle">Mecanismos bioeléctricos del Epitelio Pigmentario de la Retina (EPR) y el cálculo del Índice de Arden.</div>
+
+    <div class="layout-grid">
+        <div class="chart-container">
+            <canvas id="eogExplainChart" height="160"></canvas>
+        </div>
+
+        <div class="explanation-panel">
+            <div>
+                <div id="stepTag" style="font-size: 12px; color: #eab308; text-transform: uppercase; font-weight: bold;">Fase 1 de 5</div>
+                <div id="stepTitle" class="step-title">1. Potencial de Reposo Baseline</div>
+                <div id="stepDesc" class="step-desc">
+                    Cargando descripción...
+                </div>
+            </div>
+
+            <div class="nav-buttons">
+                <button id="prevBtn" onclick="changeStep(-1)" disabled>Anterior</button>
+                <button id="nextBtn" onclick="changeStep(1)">Siguiente</button>
+            </div>
+        </div>
+
+        <div class="metrics-bar">
+            <div class="metric-box">
+                <div class="metric-label">Basal (t = 0)</div>
+                <div class="metric-val">130 µV</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Valle Oscuridad (DT)</div>
+                <div id="dtDisplay" class="metric-val">100 µV</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Pico de Luz (LP)</div>
+                <div id="lpDisplay" class="metric-val">215 µV</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Índice de Arden (LP/DT)</div>
+                <div id="ardenDisplay" class="metric-val">2.15 (Normal)</div>
+            </div>
+        </div>
+
+        <div class="deep-dive">
+            <div class="card">
+                <h3>Mecanismo Molecular en la Membrana del EPR</h3>
+                <p id="molText">
+                    El potencial transretiniano depende de las bombas Na+/K+ ATPasa basolaterales y de la permeabilidad selectiva a iones de Cloro (Cl-) a través de la proteína <strong>bestrofina-1</strong> (codificada por el gen <em>BEST1</em>).
+                </p>
+            </div>
+            <div class="card">
+                <h3>Correlación Clínica y Diagnóstico</h3>
+                <p id="diagText">
+                    Un fallo en el pico de luz refleja daño estructural o funcional en la barrera hematorretiniana externa o en los fotorreceptores, característico de maculopatías como la Enfermedad de Best o patologías inflamatorias.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const stepsData = [
+        {
+            title: "1. Potencial Córneo-Retiniano de Reposo",
+            tag: "Fase 1 de 5 — Adaptación Inicial",
+            desc: "El globo ocular se comporta como un dipolo eléctrico constante debido a la separación de cargas entre la <strong>córnea (+ electropositiva)</strong> y el <strong>polo posterior (- electronegativo)</strong>. En iluminación estándar, las sacadas horizontales fijas registran un potencial basal cercano a 130 µV.",
+            mol: "Este gradiente iónico basal lo mantienen las bombas Na+/K+ ATPasa y la diferencia de conductancia iónica entre la membrana apical (orientada hacia fotorreceptores) y la basolateral (orientada a la coroides).",
+            diag: "Determina el valor inicial de referencia. No tiene valor diagnóstico por sí solo, pero confirma que el paciente ejecuta las sacadas horizontales correctamente.",
+            activePoint: 0
+        },
+        {
+            title: "2. Transición y Adaptación a la Oscuridad",
+            tag: "Fase 2 de 5 — Minutos 0 a 10",
+            desc: "Al apagar la luz, los fotorreceptores (bastones) se hiperpolarizan de forma sostenida. Esto reduce la liberación de mensajeros químicos hacia el EPR, provocando un <strong>cierre progresivo de los canales de cloro basolaterales</strong>.",
+            mol: "Al disminuir la salida de Cl- en la membrana basolateral del EPR, el voltaje transretiniano decae progresivamente a lo largo de 10 a 12 minutos.",
+            diag: "Una caída excesiva o ausente refleja alteraciones precoces en la cascada de fototransducción o falta de adaptación a la oscuridad.",
+            activePoint: 6
+        },
+        {
+            title: "3. Valle de Oscuridad (Dark Trough - DT)",
+            tag: "Fase 3 de 5 — Minuto 12",
+            desc: "Es el punto de <strong>mínima amplitud</strong> de todo el registro. Indica la máxima inhibición fisiológica de la conductancia iónica del EPR en ausencia de fotones.",
+            mol: "El DT representa el estado de reposo absoluto del complejo fotorreceptor-EPR antes del estímulo fótico.",
+            diag: "Es el <strong class='highlight-text'>denominador de la fórmula de Arden</strong>. Un DT anormalmente elevado o bajo puede distorsionar el cálculo del cociente.",
+            activePoint: 11
+        },
+        {
+            title: "4. Estímulo Fótico y Pico de Luz (Light Peak - LP)",
+            tag: "Fase 4 de 5 — Minuto 21",
+            desc: "Al encender una luz brillante, la rodopsina absorbe fotones y desencadena la liberación de un <em>'sustrato de pico de luz'</em> (asociado a variaciones de Ca2+ intracelular). Esto <strong>abre masivamente los canales de Cl- basolaterales (Bestrofina-1)</strong>, causando la despolarización masiva del EPR.",
+            mol: "La entrada/salida de flujo iónico despolariza la membrana basolateral, generando un pico de voltaje entre 8 y 10 minutos después de encendida la luz.",
+            diag: "Es la <strong class='highlight-text'>medida directa de la salud funcional del EPR</strong>. Si el EPR está dañado, el pico de luz no se genera ('trazado plano').",
+            activePoint: 21
+        },
+        {
+            title: "5. Evaluación del Índice de Arden",
+            tag: "Fase 5 de 5 — Interpretación Clínica",
+            desc: "El cociente de Arden se calcula dividiendo el Pico de Luz entre el Valle de Oscuridad:<br><br><strong>Índice de Arden = Light Peak (LP) / Dark Trough (DT)</strong><br><br>• <strong>Normal:</strong> Mayor a 1.8 (o > 180%)<br>• <strong>Limítrofe:</strong> 1.5 - 1.7<br>• <strong>Patológico:</strong> Menor a 1.5",
+            mol: "Un valor menor a 1.5 demuestra la incapacidad de los canales de Cl- basolaterales para responder al estímulo fótico, confirmando disfunción estructural o metabólica del EPR.",
+            diag: "Es el <strong>estándar de oro para la Enfermedad de Best</strong> (donde el ERG es normal pero el EOG es marcadamente patológico) y útil en el seguimiento de toxicidad por cloroquina y uveítis como la Retinocoroidopatía en Perdigonada.",
+            activePoint: 21
+        }
+    ];
+
+    let currentStep = 0;
+    let chartInstance = null;
+
+    const timeLabels = Array.from({length: 31}, (_, i) => `${i} min`);
+    const eogValues = [
+        130, 125, 118, 110, 104, 101, 100, 99, 99, 100,
+        100, 101, 100, 105, 112, 125, 145, 170, 192, 208,
+        214, 215, 213, 210, 202, 190, 175, 160, 150, 142, 138
+    ];
+
+    function renderChart() {
+        const ctx = document.getElementById('eogExplainChart').getContext('2d');
+        const step = stepsData[currentStep];
+
+        const pointColors = eogValues.map((_, idx) => {
+            if (idx === step.activePoint) return '#38bdf8';
+            return 'rgba(255, 255, 255, 0.2)';
+        });
+
+        const pointSizes = eogValues.map((_, idx) => {
+            if (idx === step.activePoint) return 9;
+            return 2;
+        });
+
+        if (chartInstance) chartInstance.destroy();
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [{
+                    label: 'Potencial EOG (µV)',
+                    data: eogValues,
+                    borderColor: '#0284c7',
+                    borderWidth: 3,
+                    tension: 0.35,
+                    pointBackgroundColor: pointColors,
+                    pointRadius: pointSizes,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Tiempo de Registro (Minutos)', color: '#cbd5e1' }
+                    },
+                    y: {
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Amplitud de Potencial (µV)', color: '#cbd5e1' },
+                        min: 60,
+                        max: 240
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            boxDark: {
+                                type: 'box',
+                                xMin: 0,
+                                xMax: 15,
+                                backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                label: {
+                                    display: true,
+                                    content: 'FASE OSCURIDAD (0-15 min)',
+                                    color: '#64748b',
+                                    position: 'start'
+                                }
+                            },
+                            boxLight: {
+                                type: 'box',
+                                xMin: 15,
+                                xMax: 30,
+                                backgroundColor: 'rgba(254, 240, 138, 0.05)',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                label: {
+                                    display: true,
+                                    content: 'FASE LUZ (15-30 min)',
+                                    color: '#eab308',
+                                    position: 'start'
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateStepUI() {
+        const step = stepsData[currentStep];
+        document.getElementById('stepTag').innerText = step.tag;
+        document.getElementById('stepTitle').innerText = step.title;
+        document.getElementById('stepDesc').innerHTML = step.desc;
+        document.getElementById('molText').innerHTML = step.mol;
+        document.getElementById('diagText').innerHTML = step.diag;
+
+        document.getElementById('prevBtn').disabled = currentStep === 0;
+        document.getElementById('nextBtn').disabled = currentStep === stepsData.length - 1;
+
+        renderChart();
+    }
+
+    function changeStep(delta) {
+        currentStep += delta;
+        if (currentStep < 0) currentStep = 0;
+        if (currentStep >= stepsData.length) currentStep = stepsData.length - 1;
+        updateStepUI();
+    }
+
+    window.onload = updateStepUI;
+</script>
+
+</body>
+</html>
